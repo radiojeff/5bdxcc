@@ -1,0 +1,212 @@
+#!/usr/bin/perl 
+
+# This script generates HTML based on the contents of `sum` table.
+#
+# The result is HTML and the format of the HTML is up to you.
+# 
+# The HTML table generated is basic.
+
+use DBI; 
+use CGI;
+
+my $q = new CGI;
+my $user   = 'DBuser';
+my $auth   = 'DBpass';
+my $dbname = 'DBname';
+
+my $WO = "<td class=\"wo\"></td>";
+my $NW = "<td class=\"nw\"></td>";
+my $now = `date "+\%F"`;
+my %bcount;
+
+sub printHeader
+{
+    print <<"T";
+    <table>
+    <tr>
+    <td>Prefix</td>
+    <td style="width:480px;">Entity</td>
+    <td>80m<br>$bcount{'80m'}</td>
+    <td>40m<br>$bcount{'40m'}</td>
+    <td>30m<br>$bcount{'30m'}</td>
+    <td>20m<br>$bcount{'20m'}</td>
+    <td>17m<br>$bcount{'17m'}</td>
+    <td>15m<br>$bcount{'15m'}</td>
+    <td>12m<br>$bcount{'12m'}</td>
+    <td>10m<br>$bcount{'10m'}</td>
+    </tr>
+T
+}
+
+sub printPage
+{
+
+    print <<"H";
+    <html>
+    <head>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Serif:opsz@8..144&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Libre+Caslon+Text&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Oxygen+Mono&display=swap" rel="stylesheet">
+    <style>
+    tbody tr:nth-child(odd) { background: #DDD; }
+    tbody tr:td.nth-child(even) { background: #CCC; }
+    .wo {
+       width:43px;height:27px;
+      background-repeat:no-repeat;
+      background:url(/lookup/big-worked.png);
+    }
+    
+    .nw  {
+       width:43px;height:27px;
+      background: #AAA;
+    }
+    BODY { 
+    font-family: 'Roboto', sans-serif;
+    }
+    .menubar {
+      font-family: 'Bangers', cursive;
+      font-size:   20px;
+    }
+    </style>
+    </head>
+    <body style="width:640px;font-family:'Oxygen Mono';font-size:12px;">
+    
+    <span class="menubar">
+    <a href="/">Home</a> |
+    <a href="#qsl">QSL Info</a> |
+    <a href="/lookup">Online Logbook</a> |
+    <a href="#info">Projects</a> |
+    <a href="#wire">Antenna</a> |
+    <a href="#sources">Sources</a> |
+    <a href="/history.html">History</a> |
+    <a href="wanted.html">Wanted List</a>
+    </span>
+    
+    <p>
+    
+    As of March $now
+    <p>
+    These are the DX entities that I have worked and not worked.
+    <p>
+    
+    <p>
+    What's left -- A pattern --  islands, the Middle East, and Africa for the most
+    part, and a few other entities that I cannot hear very well.
+    <p>
+    
+    Inching closer to 3BDXCC.   20m, 30m and 10m.   It's getting close.
+    <p>
+    
+    Ultimate goal is for 5BDXCC though ... ;-)
+    <p>
+    
+    (This table was produced by software automagically)
+    <p>
+
+H
+}
+
+my $sth2;
+my %attr;
+
+my $dbh = DBI->connect( 
+                       "DBI:mysql:database=$dbname;host=localhost",
+                       $user, $auth, \%attr );
+
+my $sql = "SELECT band, COUNT(DISTINCT country) " .
+          "FROM log " .
+          "GROUP BY band " .
+          "ORDER BY 1";
+
+my $sth = $dbh->prepare($sql);
+
+$sth->execute;
+
+## Produce the counts needed for the header
+if ( $sth->rows > 0 )
+{
+   for ( my $i = 0 ; $i < $sth->rows ; $i++ )
+   {
+       my ($ban, $cc) = $sth->fetchrow_array;
+       $bcount{$ban} = $cc; 
+   }
+}
+
+## Now generate the per DXCC entity records
+
+## This is just a hack to replace the NUMBER (the count) with
+## some HTML code that is 'rendering the fact'
+## (ie., the check box, etc..)
+
+
+## Note the order of the fields!!
+
+$sql = "select pfx, name, " .
+          # Non-WARC bands
+          " if (m80 > 0, '$WO', '$NW'),  " .
+          " if (m40 > 0, '$WO', '$NW'),  " .
+          " if (m20 > 0, '$WO', '$NW'),  " .
+          " if (m15 > 0, '$WO', '$NW'),  " .
+          " if (m10 > 0, '$WO', '$NW')  " .
+          # WARC bands
+          " if (m30 > 0, '$WO', '$NW'),  " .
+          " if (m17 > 0, '$WO', '$NW'),  " .
+          " if (m12 > 0, '$WO', '$NW'),  " .
+          " from sum";
+
+$sth = $dbh->prepare($sql);
+$sth->execute;
+
+## Must print something, so print the HTML that kicks off the page
+&printPage;
+
+## There is a header for the HTML table, so print the first instance.
+&printHeader;
+
+$hc = 1;
+
+if ( $sth->rows > 0 )
+{
+  for ( my $i = 0 ; $i < $sth->rows ; $i++ )
+  {
+
+      ## The HTML table is long, so repeat the header every 30 rows.
+      ## Every 30 records, re-state the header for easier reading.
+      if (($hc++ % 30) == 0 ) {
+             &printHeader;
+      }
+
+      # The order of the fields has to match the QUERY ABOVE
+      my ($pfx, $nam, 
+
+          # Non-WARC bands
+          $m80, $m40, $m20, $m15, $m10,
+
+          # WARC bands
+          $m30, $m17, $m12 ) = $sth->fetchrow_array;
+
+      ## The ARRL DXCC names use parentheses. Remove them
+      $nam =~ s/\([^\)]+\)//g;
+
+      printf ("<tr><td>$pfx</td> <td>$nam</td> " .
+              "%s " .
+              "%s " .
+              "%s " .
+              "%s " .
+              "%s " .
+              "%s " .
+              "%s " .
+              "%s </tr>\n", 
+              $m80, $m40, $m30, $m20, $m17, $m15, $m12, $m10);
+  }
+}
+
+
+## End the page
+print "</table>\n",
+      "</body>\n",
+      "</html>\n";
+

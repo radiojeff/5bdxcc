@@ -1,0 +1,75 @@
+#!/usr/bin/perl 
+
+# This script populates the `sum` table.
+
+# Result of this script is that for each DXCC entity in the table `sum`
+# all of the counts per DXCC entity is updated based on the contents of
+# the user's logging software `log` table.
+#
+# Nearly any logging software will work with this as long as the
+# QSO holds records that contain the DXCC ID number (and DXCC name) --
+# Even if the DXCC entity NAMES are different, as long as the DXCC ID's
+# match up, then things will be fine.
+#
+# The ARRL and various third party Software Vendors of logging software
+# are using DIFFERENT NAMES FOR SOME DXCC ENTITIES.  This is not good, but
+# as long as the ID numbers match, we're OK.
+#
+
+use DBI; 
+use CGI;
+
+my $q = new CGI;
+my $user   = 'DBuser';
+my $auth   = 'DBpass';
+my $dbname = 'DBname';
+
+my $sth2;
+my %attr;
+
+my $dbh = DBI->connect( 
+                 "DBI:mysql:database=$dbname;host=localhost",
+                 $user, $auth, \%attr );
+
+print STDERR "Making list of DXCC ID\n";
+
+my $sql =  "select distinct d.dxid, d.name " .
+           "from dxcc d " .
+           "where d.dxid is not null";
+
+my $sth = $dbh->prepare($sql);
+$sth->execute;
+
+## Produce the counts needed for the header
+if ( $sth->rows > 0 )
+{
+   for ( my $i = 0 ; $i < $sth->rows ; $i++ )
+   {
+       my ($dxid, $dxname) = $sth->fetchrow_array;
+       printf("Working on %s [%d]\n", $dxname, $dxid);
+
+       # Generate the SQL statement to update all the 
+       # counts for THIS DXCC entity.
+
+       my $sql2 = "update sum s " .
+                  "set " .
+                  "s.m160 = ( SELECT  COUNT(l.callsign) FROM dxcc d LEFT JOIN log l ON l.dxcc = $dxid and l.band = '160m' GROUP BY d.pfx, d.dxid having d.dxid = $dxid ), " .
+                  "s.m80 = ( SELECT  COUNT(l.callsign) FROM dxcc d LEFT JOIN log l ON l.dxcc = $dxid and l.band = '80m' GROUP BY d.pfx, d.dxid having d.dxid = $dxid ), " .
+                  "s.m40 = ( SELECT  COUNT(l.callsign) FROM dxcc d LEFT JOIN log l ON l.dxcc = $dxid and l.band = '40m' GROUP BY d.pfx, d.dxid having d.dxid = $dxid ), " .
+                  "s.m30 = ( SELECT  COUNT(l.callsign) FROM dxcc d LEFT JOIN log l ON l.dxcc = $dxid and l.band = '30m' GROUP BY d.pfx, d.dxid having d.dxid = $dxid ), " .
+                  "s.m20 = ( SELECT  COUNT(l.callsign) FROM dxcc d LEFT JOIN log l ON l.dxcc = $dxid and l.band = '20m' GROUP BY d.pfx, d.dxid having d.dxid = $dxid ), " .
+                  "s.m17 = ( SELECT  COUNT(l.callsign) FROM dxcc d LEFT JOIN log l ON l.dxcc = $dxid and l.band = '17m' GROUP BY d.pfx, d.dxid having d.dxid = $dxid ), " .
+                  "s.m15 = ( SELECT  COUNT(l.callsign) FROM dxcc d LEFT JOIN log l ON l.dxcc = $dxid and l.band = '15m' GROUP BY d.pfx, d.dxid having d.dxid = $dxid ), " .
+                  "s.m12 = ( SELECT  COUNT(l.callsign) FROM dxcc d LEFT JOIN log l ON l.dxcc = $dxid and l.band = '12m' GROUP BY d.pfx, d.dxid having d.dxid = $dxid ), " .
+                  "s.m10 = ( SELECT  COUNT(l.callsign) FROM dxcc d LEFT JOIN log l ON l.dxcc = $dxid and l.band = '10m' GROUP BY d.pfx, d.dxid having d.dxid = $dxid ), " .
+                  "s.m2 = ( SELECT  COUNT(l.callsign) FROM dxcc d LEFT JOIN log l ON l.dxcc = $dxid and l.band = '2m' GROUP BY d.pfx, d.dxid having d.dxid = $dxid ) " .
+        "  where s.dxid = $dxid; ";
+
+        # Now we have the SQL statement
+
+        # Run it.
+        my $sth2 = $dbh->prepare($sql2);
+        $sth2->execute;
+   }
+}
+
